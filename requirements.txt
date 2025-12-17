@@ -1,4 +1,9 @@
-Flask==3.0.0
+
+flask
+flask-login
+flask-mail
+email-validator
 gunicorn==21.2.0
-Flask-Login==0.6.3
-Flask-Mail==0.9.1
+python-dotenv
+flask-sqlalchemy
+psycopg2-binary

@@ -1,20 +1,27 @@
 from flask import Flask, render_template, request, redirect, url_for, make_response, flash
 import os
-import sqlite3
 import csv
 import io
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-try:
-    from flask_mail import Mail, Message
-except ImportError:
-    Mail = None
-    Message = None
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-# Secret key for sessions (Use Env Var in production)
+# Secret key
 app.secret_key = os.environ.get('SECRET_KEY', 'super_secret_key_for_dev_only')
+
+# Database Configuration
+# Use Render's DATABASE_URL if available, otherwise local SQLite
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///todo.db')
+# Fix for Render's postgres:// usage (SQLAlchemy needs postgresql://)
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
 
 # Email Configuration
 app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
@@ -24,106 +31,73 @@ app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'your-email@gmail.
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'your-app-password')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'your-email@gmail.com')
 
-if Mail:
+try:
+    from flask_mail import Mail, Message
     mail = Mail(app)
-else:
+except ImportError:
     mail = None
+    Message = None
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-import sys
+# --- Models ---
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    email = db.Column(db.String(150))
+    
+    tasks = db.relationship('Task', backref='owner', lazy=True)
+    shared_tasks = db.relationship('TaskShare', backref='user', lazy=True)
 
-if getattr(sys, 'frozen', False):
-    # If running as compiled exe, store DB in the same folder as the exe
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    # If running as script, use current folder
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "todo.db")
-TASK_FILE = os.path.join(BASE_DIR, "tasks.txt")
+class Task(db.Model):
+    __tablename__ = 'tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.String(500), nullable=False)
+    done = db.Column(db.Boolean, default=False)
+    priority = db.Column(db.String(50), default='Medium')
+    due_date = db.Column(db.String(50))
+    category = db.Column(db.String(50), default='Personal')
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    shares = db.relationship('TaskShare', backref='task', lazy=True, cascade="all, delete-orphan")
 
-class User(UserMixin):
-    def __init__(self, id, username, password_hash, email=None):
-        self.id = id
-        self.username = username
-        self.password_hash = password_hash
-        self.email = email
+class TaskShare(db.Model):
+    __tablename__ = 'task_shares'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    permission = db.Column(db.String(50), default='view')
 
+# --- Helpers ---
 @login_manager.user_loader
 def load_user(user_id):
-    conn = get_db_connection()
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (int(user_id),)).fetchone()
-    conn.close()
-    if user:
-        return User(user['id'], user['username'], user['password_hash'], user['email'])
-    return None
+    return User.query.get(int(user_id))
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    conn = get_db_connection()
-    # Create users table
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT,
-            password_hash TEXT NOT NULL
-        )
-    ''')
-    
-    # Check if email column exists (migration for existing db)
-    existing_columns = [row['name'] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
-    if 'email' not in existing_columns:
-        conn.execute('ALTER TABLE users ADD COLUMN email TEXT')
-    
-    # Create tasks table with user_id
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            content TEXT NOT NULL,
-            done BOOLEAN NOT NULL DEFAULT 0,
-            priority TEXT DEFAULT 'Medium',
-            due_date TEXT,
-            category TEXT DEFAULT 'Personal',
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-    conn.close()
-
+# --- Routes ---
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         
-        conn = get_db_connection()
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists!')
+            return redirect(url_for('register'))
+        
+        hashed_pw = generate_password_hash(password)
+        new_user = User(username=username, password_hash=hashed_pw)
+        
         try:
-            # Check if user exists
-            user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-            if user:
-                flash('Username already exists!')
-                conn.close()
-                return redirect(url_for('register'))
-            
-            hashed_pw = generate_password_hash(password)
-            conn.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, hashed_pw))
-            conn.commit()
-            conn.close()
+            db.session.add(new_user)
+            db.session.commit()
             flash('Registration successful! Please login.')
             return redirect(url_for('login'))
         except Exception as e:
-            conn.close()
-            flash('An error occurred.')
+            flash(f'Error: {e}')
             
     return render_template('register.html')
 
@@ -133,13 +107,10 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        conn = get_db_connection()
-        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
-        conn.close()
+        user = User.query.filter_by(username=username).first()
         
-        if user and check_password_hash(user['password_hash'], password):
-            user_obj = User(user['id'], user['username'], user['password_hash'])
-            login_user(user_obj)
+        if user and check_password_hash(user.password_hash, password):
+            login_user(user)
             return redirect(url_for('index'))
         else:
             flash('Invalid username or password')
@@ -155,24 +126,15 @@ def logout():
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
-    conn = get_db_connection()
     if request.method == 'POST':
         email = request.form['email']
-        
+        current_user.email = email
         try:
-            conn.execute('UPDATE users SET email = ? WHERE id = ?', (email, current_user.id))
-            conn.commit()
+            db.session.commit()
             flash('Profile updated successfully!')
         except Exception as e:
             flash(f'Error updating profile: {e}')
             
-    # Fetch latest user data
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (current_user.id,)).fetchone()
-    conn.close()
-    
-    # Update current_user object (optional, but good for display)
-    current_user.email = user['email']
-    
     return render_template('profile.html')
 
 @app.route('/')
@@ -181,38 +143,31 @@ def index():
     category_filter = request.args.get('category', 'All')
     sort_by = request.args.get('sort', 'newest')
     
-    conn = get_db_connection()
+    # Base query: My tasks OR Tasks shared with me
+    # SQLAlchemy construct for OR condition
+    shared_task_ids = [share.task_id for share in TaskShare.query.filter_by(user_id=current_user.id).all()]
     
-    query = '''
-        SELECT tasks.*, users.username as owner_name 
-        FROM tasks 
-        JOIN users ON tasks.user_id = users.id
-        WHERE tasks.user_id = ? 
-        OR tasks.id IN (SELECT task_id FROM task_shares WHERE user_id = ?)
-    '''
-    params = [current_user.id, current_user.id]
+    query = Task.query.filter(
+        (Task.user_id == current_user.id) | (Task.id.in_(shared_task_ids))
+    )
     
     if category_filter != 'All':
-        query += ' AND category = ?'
-        params.append(category_filter)
+        query = query.filter_by(category=category_filter)
         
     if sort_by == 'due_date':
-        query += ' ORDER BY due_date ASC'
-    elif sort_by == 'priority':
-        # Custom sort order: High -> Medium -> Low
-        query += ''' ORDER BY CASE priority 
-                     WHEN 'High' THEN 1 
-                     WHEN 'Medium' THEN 2 
-                     WHEN 'Low' THEN 3 
-                     ELSE 4 END'''
+        query = query.order_by(Task.due_date.asc())
     elif sort_by == 'oldest':
-        query += ' ORDER BY tasks.id ASC'
-    else: # newest is default
-        query += ' ORDER BY tasks.id DESC'
+        query = query.order_by(Task.id.asc())
+    else: # newest
+        query = query.order_by(Task.id.desc())
         
-    tasks = conn.execute(query, params).fetchall()
-    conn.close()
+    tasks = query.all()
     
+    # Custom python sort for Priority if needed (SQLAlchemy custom sort is verbose)
+    if sort_by == 'priority':
+        priority_order = {'High': 1, 'Medium': 2, 'Low': 3}
+        tasks.sort(key=lambda x: priority_order.get(x.priority, 4))
+
     return render_template('index.html', tasks=tasks, 
                          current_category=category_filter, 
                          current_sort=sort_by)
@@ -220,32 +175,24 @@ def index():
 @app.route('/share/<int:id>', methods=['GET', 'POST'])
 @login_required
 def share_task(id):
-    conn = get_db_connection()
     if request.method == 'POST':
         username = request.form['username']
-        
-        # Check if user exists
-        user_to_share = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        user_to_share = User.query.filter_by(username=username).first()
         
         if user_to_share:
-            # Check if already shared
-            existing = conn.execute('SELECT * FROM task_shares WHERE task_id = ? AND user_id = ?', 
-                                  (id, user_to_share['id'])).fetchone()
+            existing = TaskShare.query.filter_by(task_id=id, user_id=user_to_share.id).first()
             if not existing:
-                conn.execute('INSERT INTO task_shares (task_id, user_id) VALUES (?, ?)', 
-                           (id, user_to_share['id']))
-                conn.commit()
+                new_share = TaskShare(task_id=id, user_id=user_to_share.id)
+                db.session.add(new_share)
+                db.session.commit()
                 flash(f'Task shared with {username}!')
             else:
                 flash(f'Already shared with {username}.')
         else:
             flash('User not found.')
-            
-        conn.close()
         return redirect(url_for('index'))
         
-    task = conn.execute('SELECT * FROM tasks WHERE id = ? AND user_id = ?', (id, current_user.id)).fetchone()
-    conn.close()
+    task = Task.query.filter_by(id=id, user_id=current_user.id).first()
     
     if task is None:
         flash('You can only share your own tasks.')
@@ -262,120 +209,70 @@ def add_task():
     due_date = request.form.get('due_date')
     
     if content:
-        conn = get_db_connection()
-        conn.execute('INSERT INTO tasks (user_id, content, priority, due_date, category) VALUES (?, ?, ?, ?, ?)',
-                     (current_user.id, content, priority, due_date, category))
-        conn.commit()
-        conn.close()
+        new_task = Task(
+            content=content,
+            priority=priority,
+            category=category,
+            due_date=due_date,
+            user_id=current_user.id
+        )
+        db.session.add(new_task)
+        db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/delete/<int:id>', methods=['POST'])
 @login_required
 def delete_task(id):
-    conn = get_db_connection()
-    conn.execute('DELETE FROM tasks WHERE id = ? AND user_id = ?', (id, current_user.id))
-    conn.commit()
-    conn.close()
+    task = Task.query.filter_by(id=id, user_id=current_user.id).first()
+    if task:
+        db.session.delete(task)
+        db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/toggle/<int:id>', methods=['POST'])
 @login_required
 def toggle_task(id):
-    conn = get_db_connection()
-    # Toggle the 'done' status
-    task = conn.execute('SELECT done FROM tasks WHERE id = ? AND user_id = ?', (id, current_user.id)).fetchone()
+    task = Task.query.filter_by(id=id, user_id=current_user.id).first()
     if task:
-        new_status = not task['done']
-        conn.execute('UPDATE tasks SET done = ? WHERE id = ? AND user_id = ?', (new_status, id, current_user.id))
-        conn.commit()
-    conn.close()
+        task.done = not task.done
+        db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/edit/<int:id>', methods=['GET', 'POST'])
 @login_required
 def edit_task(id):
-    conn = get_db_connection()
+    task = Task.query.filter_by(id=id, user_id=current_user.id).first()
+    
+    if not task:
+        return redirect(url_for('index'))
+        
     if request.method == 'POST':
-        content = request.form.get('task')
-        priority = request.form.get('priority')
-        category = request.form.get('category')
-        due_date = request.form.get('due_date')
-        
-        conn.execute('UPDATE tasks SET content = ?, priority = ?, due_date = ?, category = ? WHERE id = ? AND user_id = ?',
-                     (content, priority, due_date, category, id, current_user.id))
-        conn.commit()
-        conn.close()
+        task.content = request.form.get('task')
+        task.priority = request.form.get('priority')
+        task.category = request.form.get('category')
+        task.due_date = request.form.get('due_date')
+        db.session.commit()
         return redirect(url_for('index'))
     
-    task = conn.execute('SELECT * FROM tasks WHERE id = ? AND user_id = ?', (id, current_user.id)).fetchone()
-    conn.close()
-    
-    if task is None:
-        return redirect(url_for('index'))
-        
     return render_template('edit.html', task=task)
 
 @app.route('/export')
 @login_required
 def export_tasks():
-    conn = get_db_connection()
-    tasks = conn.execute('SELECT * FROM tasks WHERE user_id = ?', (current_user.id,)).fetchall()
-    conn.close()
+    tasks = Task.query.filter_by(user_id=current_user.id).all()
 
     si = io.StringIO()
     cw = csv.writer(si)
-    # Write Header
     cw.writerow(['ID', 'Task', 'Done', 'Priority', 'Due Date', 'Category'])
-    # Write Data
     for task in tasks:
-        cw.writerow([task['id'], task['content'], task['done'], task['priority'], task['due_date'], task['category']])
+        cw.writerow([task.id, task.content, task.done, task.priority, task.due_date, task.category])
 
     output = make_response(si.getvalue())
     output.headers["Content-Disposition"] = "attachment; filename=tasks.csv"
     output.headers["Content-type"] = "text/csv"
     return output
 
-def update_schema():
-    conn = get_db_connection()
-    
-    # 1. Create task_shares if not exists
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS task_shares (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            task_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            permission TEXT DEFAULT 'view',
-            FOREIGN KEY (task_id) REFERENCES tasks (id),
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
-    
-    # 2. Add email column to users if not exists
-    try:
-        # Check if email column exists
-        existing_columns = [row[1] for row in conn.execute("PRAGMA table_info(users)").fetchall()]
-        if 'email' not in existing_columns:
-            conn.execute('ALTER TABLE users ADD COLUMN email TEXT')
-            
-        # 3. Add user_id column to tasks if not exists (Migration from legacy)
-        task_columns = [row[1] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()]
-        if 'user_id' not in task_columns:
-            # Add user_id column with default value 1 (First user)
-            conn.execute('ALTER TABLE tasks ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1')
-            
-    except Exception as e:
-        print(f"Schema update error: {e}")
-
-    conn.commit()
-    conn.close()
-
-# Ensure DB is ready (Runs on Import for WSGI)
-if not os.path.exists(DB_FILE):
-    init_db()
-    
-# Always check for schema updates
-update_schema()
-
 if __name__ == '__main__':
-    app.run(debug=True, port=9000) 
-
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=9000)
