@@ -272,7 +272,9 @@ def export_tasks():
     output.headers["Content-type"] = "text/csv"
     return output
 
+# Create tables if they don't exist (Runs on Render startup)
+with app.app_context():
+    db.create_all()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True, port=9000)
