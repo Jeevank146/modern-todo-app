@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}My Tasks - Modern To-Do{% endblock %}
+
+{% block body %}
+<div class="container">
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="brand">
+            <i class="fas fa-check-double"></i> ModernDo
+        </div>
+        <div class="nav-links">
+            <span style="font-weight: 500; font-size: 0.9rem;">Hi, {{ current_user.username }}</span>
+            <a href="{{ url_for('profile') }}" class="nav-btn" title="My Profile">
+                <i class="fas fa-user-circle fa-lg"></i>
+            </a>
+            <a href="{{ url_for('logout') }}" class="nav-btn" title="Logout">
+                <i class="fas fa-sign-out-alt fa-lg"></i>
+            </a>
+        </div>
+    </nav>
+
+    <div class="grid-layout">
+        <!-- Main Content -->
+        <main>
+            <!-- Add Task Card -->
+            <div class="add-task-wrapper">
+                <form action="/add" method="POST">
+                    <div style="margin-bottom: 1rem;">
+                        <input type="text" name="task" placeholder="What needs to be done?" required autocomplete="off"
+                            style="font-size: 1.1rem; padding: 1rem;">
+                    </div>
+
+                    <div class="add-task-row">
+                        <select name="category" title="Category">
+                            <option value="Personal" selected>Personal</option>
+                            <option value="Work">Work</option>
+                            <option value="Shopping">Shopping</option>
+                            <option value="Study">Study</option>
+                            <option value="Other">Other</option>
+                        </select>
+
+                        <select name="priority" title="Priority">
+                            <option value="Low">Low Priority</option>
+                            <option value="Medium" selected>Medium Priority</option>
+                            <option value="High">High Priority</option>
+                        </select>
+
+                        <input type="datetime-local" name="due_date" title="Due Date">
+                    </div>
+
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Task
+                    </button>
+                </form>
+            </div>
+
+            <!-- Controls -->
+            <div class="filter-bar">
+                <form action="{{ url_for('index') }}" method="GET" style="display: flex; gap: 1.5rem; width: 100%;">
+                    <select name="category" onchange="this.form.submit()" class="filter-select">
+                        <option value="All" {% if current_category=='All' %}selected{% endif %}>All Categories</option>
+                        <option value="Personal" {% if current_category=='Personal' %}selected{% endif %}>Personal
+                        </option>
+                        <option value="Work" {% if current_category=='Work' %}selected{% endif %}>Work</option>
+                        <option value="Shopping" {% if current_category=='Shopping' %}selected{% endif %}>Shopping
+                        </option>
+                        <option value="Study" {% if current_category=='Study' %}selected{% endif %}>Study</option>
+                        <option value="Other" {% if current_category=='Other' %}selected{% endif %}>Other</option>
+                    </select>
+
+                    <select name="sort" onchange="this.form.submit()" class="filter-select">
+                        <option value="newest" {% if current_sort=='newest' %}selected{% endif %}>Newest First</option>
+                        <option value="oldest" {% if current_sort=='oldest' %}selected{% endif %}>Oldest First</option>
+                        <option value="priority" {% if current_sort=='priority' %}selected{% endif %}>High Priority
+                            First</option>
+                        <option value="due_date" {% if current_sort=='due_date' %}selected{% endif %}>Due Date</option>
+                    </select>
+
+                    <a href="{{ url_for('export_tasks') }}" class="nav-btn" style="margin-left: auto;"
+                        title="Export CSV">
+                        <i class="fas fa-file-download"></i> Export
+                    </a>
+                </form>
+            </div>
+
+            <!-- Task List -->
+            <ul class="task-list">
+                {% for task in tasks %}
+                <li class="task-item {{ 'completed' if task['done'] else '' }}">
+                    <form action="{{ url_for('toggle_task', id=task['id']) }}" method="POST" class="task-checkbox-form">
+                        <button type="submit" class="task-checkbox">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </form>
+
+                    <div class="task-content">
+                        <span class="task-text">{{ task['content'] }}</span>
+                        <div class="task-meta">
+                            <span class="badge badge-category">{{ task['category'] }}</span>
+                            <span class="badge badge-{{ task['priority'].lower() }}">{{ task['priority'] }}</span>
+
+                            {% if task['due_date'] %}
+                            <span><i class="far fa-clock"></i> {{ task['due_date'].replace('T', ' ') }}</span>
+                            {% endif %}
+
+                            {% if task['owner_name'] != current_user.username %}
+                            <span class="badge" style="background: #7c4dff; color: white;">By {{ task['owner_name']
+                                }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="task-actions" style="display: flex; gap: 0.5rem;">
+                        {% if task['owner_name'] == current_user.username %}
+                        <a href="{{ url_for('share_task', id=task['id']) }}" class="btn-icon" title="Share">
+                            <i class="fas fa-user-plus"></i>
+                        </a>
+                        <a href="{{ url_for('edit_task', id=task['id']) }}" class="btn-icon" title="Edit">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        <form action="{{ url_for('delete_task', id=task['id']) }}" method="POST">
+                            <button type="submit" class="btn-icon" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </li>
+                {% else %}
+                <div style="text-align: center; padding: 4rem 0; color: var(--text-muted);">
+                    <i class="fas fa-clipboard-check" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                    <p>No tasks found. Enjoy your day!</p>
+                </div>
+                {% endfor %}
+            </ul>
+        </main>
+    </div>
+</div>
+{% endblock %}

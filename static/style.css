@@ -1,0 +1,512 @@
+:root {
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --primary-color: #bb86fc;
+    --secondary-color: #03dac6;
+    --text-color: #e0e0e0;
+    --error-color: #cf6679;
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+body.light-mode {
+    --bg-color: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-color: #1a1a1a;
+    --glass-bg: rgba(0, 0, 0, 0.04);
+    --glass-border: rgba(0, 0, 0, 0.15);
+    /* Darker border for visibility */
+    --primary-color: #6200ea;
+    /* Darker purple for better contrast */
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-image:
+        radial-gradient(circle at 10% 20%, rgba(187, 134, 252, 0.1) 0%, transparent 20%),
+        radial-gradient(circle at 90% 80%, rgba(3, 218, 198, 0.1) 0%, transparent 20%);
+}
+
+.container {
+    width: 100%;
+    max-width: 500px;
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+}
+
+header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+h1 {
+    font-weight: 600;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+header p {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.add-task-container {
+    margin-bottom: 2rem;
+}
+
+.add-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+input[type="text"] {
+    flex-basis: 100%;
+    width: 100%;
+}
+
+select,
+input[type="date"],
+input[type="datetime-local"] {
+    flex: 1;
+}
+
+button {
+    flex: 0 0 auto;
+}
+
+input[type="text"],
+input[type="date"],
+input[type="datetime-local"],
+select {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: 12px 16px;
+    border-radius: 8px;
+    color: white;
+    font-family: inherit;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    color-scheme: dark;
+}
+
+/* Force calendar icon to be white/purple filter */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.7;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+input[type="text"] {
+    flex-grow: 1;
+}
+
+select,
+input[type="date"],
+input[type="datetime-local"] {
+    cursor: pointer;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.2);
+}
+
+.add-btn {
+    background-color: #bb86fc;
+    /* Fallback */
+    background: linear-gradient(135deg, #bb86fc 0%, #03dac6 100%) !important;
+    color: white !important;
+    border: none;
+    border-radius: 12px;
+    width: 50px;
+    height: 50px;
+    min-width: 50px;
+    /* Ensure it stays square */
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(187, 134, 252, 0.3);
+    margin-left: 5px;
+    /* Spacing */
+}
+
+.add-btn i {
+    pointer-events: none;
+    /* Icon shouldn't block click */
+}
+
+.add-btn:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 6px 20px rgba(187, 134, 252, 0.5);
+}
+
+option {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+}
+
+/* Priority Colors */
+.priority-high-border {
+    border-left: 4px solid #cf6679;
+}
+
+.priority-medium-border {
+    border-left: 4px solid #ffb74d;
+}
+
+.priority-low-border {
+    border-left: 4px solid #81c784;
+}
+
+.badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-right: 8px;
+    text-transform: uppercase;
+}
+
+.priority-high {
+    background: rgba(207, 102, 121, 0.2);
+    color: #cf6679;
+}
+
+.priority-medium {
+    background: rgba(255, 183, 77, 0.2);
+    color: #ffb74d;
+}
+
+.priority-low {
+    background: rgba(129, 199, 132, 0.2);
+    color: #81c784;
+}
+
+.category-badge {
+    background: rgba(187, 134, 252, 0.2);
+    color: #bb86fc;
+    border: 1px solid rgba(187, 134, 252, 0.3);
+}
+
+.task-item {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: 1rem;
+    margin-bottom: 0.8rem;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: transform 0.2s, border-color 0.3s;
+    animation: slideIn 0.3s ease-out;
+}
+
+.task-item.completed {
+    opacity: 0.6;
+}
+
+.task-item.completed .task-text {
+    text-decoration: line-through;
+    color: #888;
+}
+
+.task-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-grow: 1;
+}
+
+.task-content {
+    display: flex;
+    flex-direction: column;
+}
+
+.task-meta {
+    margin-top: 4px;
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.due-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.action-btn {
+    background: transparent;
+    color: #666;
+    padding: 8px;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.check-btn {
+    background: transparent;
+    border: none;
+    color: var(--secondary-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.search-btn:hover {
+    color: var(--primary-color);
+}
+
+.delete-btn:hover {
+    color: var(--error-color);
+}
+
+.task-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.empty-state {
+    text-align: center;
+    color: #666;
+    padding: 2rem 0;
+    font-style: italic;
+}
+
+/* Authentication Page Styles */
+.auth-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.auth-container {
+    background: var(--card-bg);
+    padding: 2.5rem;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    text-align: center;
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+.auth-container h1 {
+    margin-bottom: 0.5rem;
+    color: var(--primary-color);
+}
+
+.auth-container p {
+    color: #888;
+    margin-bottom: 2rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    /* Increased gap */
+    width: 100%;
+}
+
+.auth-form input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    padding: 14px 16px;
+    /* Larger padding */
+    border-radius: 12px;
+    color: var(--text-color);
+    font-size: 1rem;
+    width: 100%;
+    /* Force full width */
+    box-sizing: border-box;
+    /* Ensure padding doesn't affect width */
+    display: block;
+    /* Ensure block display */
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.auth-btn {
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, background 0.2s;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.auth-btn:hover {
+    transform: translateY(-2px);
+    background: #7c4dff;
+}
+
+/* Google Button */
+.google-btn {
+    background: white;
+    color: #333;
+    border: 1px solid #ddd;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    margin-top: 15px;
+    transition: background 0.2s;
+}
+
+.google-btn:hover {
+    background: #f5f5f5;
+}
+
+.google-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 20px 0;
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.divider:not(:empty)::before {
+    margin-right: .5em;
+}
+
+.divider:not(:empty)::after {
+    margin-left: .5em;
+}
+
+.login-footer {
+    margin-top: 20px;
+    font-size: 0.9rem;
+}
+
+.login-footer a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.controls {
+    margin-bottom: 1.5rem;
+}
+
+.filter-form {
+    display: flex;
+    gap: 10px;
+}
+
+.filter-select {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    color: #bbb;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.filter-select:focus {
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.export-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #03dac6 0%, #018786 100%);
+    border: none;
+    color: #000;
+    /* Dark text on bright teal */
+    padding: 10px 16px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(3, 218, 198, 0.3);
+    font-weight: 600;
+}
+
+.export-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(3, 218, 198, 0.5);
+    color: #000;
+}

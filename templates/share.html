@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}Share Task - Modern To-Do{% endblock %}
+
+{% block body %}
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h1 class="auth-title">Share Task</h1>
+        <div
+            style="background: var(--background); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 2rem; border: 1px solid var(--border);">
+            <i class="fas fa-quote-left" style="color: var(--primary); margin-right: 0.5rem;"></i>
+            {{ task.content }}
+        </div>
+
+        <form action="{{ url_for('share_task', id=task.id) }}" method="POST" class="auth-form">
+            <input type="text" name="username" placeholder="Username to share with" required autocomplete="off">
+            <button type="submit" class="btn-primary">
+                <i class="fas fa-share-alt"></i> Share Task
+            </button>
+        </form>
+
+        <div class="auth-footer">
+            <a href="{{ url_for('index') }}">&larr; Back to Tasks</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
