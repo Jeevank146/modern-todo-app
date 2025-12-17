@@ -276,5 +276,13 @@ def export_tasks():
 with app.app_context():
     db.create_all()
 
+@app.route('/init-db')
+def init_db():
+    try:
+        db.create_all()
+        return 'Database tables created successfully! <a href="/login">Go to Login</a>'
+    except Exception as e:
+        return f'An error occurred: {e}'
+
 if __name__ == '__main__':
     app.run(debug=True, port=9000)
